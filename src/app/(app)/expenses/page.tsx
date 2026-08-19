@@ -1,5 +1,5 @@
 import { addDays, startOfMonth } from "date-fns";
-import { and, asc, desc, eq, isNull, like, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, like, sql, type SQL } from "drizzle-orm";
 import { CircleDollarSign, Plus, ReceiptText, Store, Tags } from "lucide-react";
 import Link from "next/link";
 import { ExpenseCategoryForm } from "@/components/expense-category-form";
@@ -30,8 +30,8 @@ export default async function Page({ searchParams }: Props) {
     const weekStart = addDays(now, -6);
     const summary = (await (db.select({
         all: sql<number> `coalesce(sum(${expenses.amount}), 0)::double precision`,
-        month: sql<number> `coalesce(sum(case when ${expenses.expenseDate} >= ${monthStart} then ${expenses.amount} else 0 end), 0)::double precision`,
-        week: sql<number> `coalesce(sum(case when ${expenses.expenseDate} >= ${weekStart} then ${expenses.amount} else 0 end), 0)::double precision`,
+        month: sql<number> `coalesce(sum(case when ${gte(expenses.expenseDate, monthStart)} then ${expenses.amount} else 0 end), 0)::double precision`,
+        week: sql<number> `coalesce(sum(case when ${gte(expenses.expenseDate, weekStart)} then ${expenses.amount} else 0 end), 0)::double precision`,
     }).from(expenses)).where(eq(expenses.gymId, user.gymId)))[0]!;
     const filters: SQL[] = [eq(expenses.gymId, user.gymId)];
     if (params.category)

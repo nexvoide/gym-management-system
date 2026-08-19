@@ -14,6 +14,9 @@ export async function register(_:RegisterState,data:FormData):Promise<RegisterSt
   if (!(await consumeLimit("auth:register", email, 3, 60 * 60 * 1000)).allowed) return {error:"Too many registration attempts. Please try again later."};
   const {data:authData,error:authError}=await supabase.auth.signUp({email,password:parsed.data.password,options:{data:{name:`${parsed.data.firstName} ${parsed.data.lastName}`}}});
   if(authError)return {error:authError.message};
+  // Supabase deliberately obfuscates signups for an existing identity. Do not
+  // create an application owner row unless this request created a real identity.
+  if(!authData.user?.identities?.length){await supabase.auth.signOut();return {error:"An account already exists for this email."};}
   try{await registerGym({...parsed.data,email});}catch(error){await supabase.auth.signOut();if(error instanceof Error&&error.message==="EMAIL_EXISTS")return {error:"An account already exists for this email."};return {error:"Your gym could not be created. Please contact support before retrying."};}
   if(!authData.session)redirect("/login?confirmed=0");
   redirect("/dashboard?welcome=1");
