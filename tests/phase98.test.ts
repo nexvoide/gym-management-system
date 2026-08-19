@@ -27,3 +27,5 @@ test("production hardening is configured without exposing diagnostics", () => {
 });
 
 test("auth abuse controls are shared and recovery is enumeration-safe",()=>{const login=readFileSync("src/app/login/actions.ts","utf8"),register=readFileSync("src/app/register/actions.ts","utf8"),forgot=readFileSync("src/app/forgot-password/actions.ts","utf8"),form=readFileSync("src/app/forgot-password/forgot-form.tsx","utf8");assert.match(login,/consumeLimit\("auth:login"/);assert.match(register,/consumeLimit\("auth:register"/);assert.match(forgot,/consumeLimit\("auth:password-reset"/);assert.match(forgot,/sent:\s*true/);assert.match(form,/If that account exists/);});
+
+test("login distinguishes confirmation and application mapping failures without exposing credentials",()=>{const login=readFileSync("src/app/login/actions.ts","utf8"),page=readFileSync("src/app/login/page.tsx","utf8");assert.match(login,/error\.code === "email_not_confirmed"/);assert.match(login,/auth\.application_user_missing/);assert.match(login,/auth\.application_user_inactive/);assert.match(login,/The email or password is incorrect/);assert.match(page,/Confirm your email address before signing in/);});

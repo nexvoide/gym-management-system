@@ -21,13 +21,18 @@ export async function login(_: LoginState, formData: FormData): Promise<LoginSta
     }
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithPassword({ email: key, password: parsed.data.password });
-    const user = (await (db.select({ id: users.id, active: users.active }).from(users)).where(eq(users.email, key)))[0];
-    if (error || !user?.active) {
-        if (!error)
-            await supabase.auth.signOut();
-        logger.warn("auth.login_failed");
+    if (error) {
+        logger.warn("auth.login_rejected", { errorCode: error.code ?? "unknown" });
         await consumeLimit("auth:login", key, 5, 15 * 60 * 1000);
+        if (error.code === "email_not_confirmed")
+            return { error: "Confirm your email address before signing in. Check your inbox for the confirmation link." };
         return { error: "The email or password is incorrect." };
+    }
+    const user = (await (db.select({ id: users.id, active: users.active }).from(users)).where(eq(users.email, key)))[0];
+    if (!user?.active) {
+        await supabase.auth.signOut();
+        logger.warn(user ? "auth.application_user_inactive" : "auth.application_user_missing");
+        return { error: "Your account cannot access the application. Contact support." };
     }
     await clearLimit("auth:login", key);
     await (db.update(users).set({ lastLoginAt: new Date(), updatedAt: new Date() })).where(eq(users.id, user.id));
