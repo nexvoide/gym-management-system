@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound(){return <main className="auth-panel" style={{minHeight:"100vh"}}><section className="auth-card"><div className="eyebrow">404</div><h2>Page not found</h2><p className="muted">This record may not exist, may have been archived, or may not belong to your workspace.</p><Link className="btn btn-primary btn-block" href="/dashboard">Return to dashboard</Link></section></main>}

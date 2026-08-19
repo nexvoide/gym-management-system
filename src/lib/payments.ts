@@ -1,0 +1,15 @@
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { gyms, invoiceItems, invoices, members, payments, settings, users } from "@/db/schema";
+export const roundMoney = (amount: number) => Math.round((amount + Number.EPSILON) * 100) / 100;
+export function paymentState(total: number, paid: number, dueAt: Date, now = new Date()) { const safePaid = roundMoney(Math.min(Math.max(paid, 0), total)), balance = roundMoney(Math.max(0, total - safePaid)); const status = balance === 0 ? "paid" : safePaid > 0 ? "partially_paid" : dueAt < now ? "overdue" : "unpaid"; return { paid: safePaid, balance, status } as const; }
+export async function paymentMethods(gymId: string) { const row = (await (db.select({ value: settings.value }).from(settings)).where(and(eq(settings.gymId, gymId), eq(settings.key, "methods"))))[0]; const methods = Array.isArray(row?.value) ? row.value.filter((item: unknown): item is string => typeof item === "string") : []; return methods.length ? methods : ["Cash", "Card", "Bank Transfer", "Online", "Other"]; }
+export async function invoiceDetail(gymId: string, id: string) {
+    const invoice = (await (((db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, memberId: members.id, memberNumber: members.memberNumber, firstName: members.firstName, lastName: members.lastName, phone: members.phone, email: members.email, issuedAt: invoices.issuedAt, dueAt: invoices.dueAt, subtotal: invoices.subtotal, discount: invoices.discount, tax: invoices.tax, total: invoices.total, paid: invoices.paid, balance: invoices.balance, status: invoices.status, notes: invoices.notes, gymName: gyms.name, gymPhone: gyms.phone, gymEmail: gyms.email, gymAddress: gyms.address, currency: gyms.currency }).from(invoices)).innerJoin(members, eq(invoices.memberId, members.id))).innerJoin(gyms, eq(invoices.gymId, gyms.id))).where(and(eq(invoices.gymId, gymId), eq(invoices.id, id))))[0];
+    if (!invoice)
+        return null;
+    const items = await (db.select().from(invoiceItems)).where(eq(invoiceItems.invoiceId, id));
+    const ledger = await (((db.select({ id: payments.id, amount: payments.amount, method: payments.method, paidAt: payments.paidAt, reference: payments.reference, notes: payments.notes, recordedBy: users.name }).from(payments)).leftJoin(users, eq(payments.recordedBy, users.id))).where(eq(payments.invoiceId, id))).orderBy(desc(payments.paidAt));
+    return { ...invoice, items, ledger };
+}
+export async function memberFinancials(gymId: string, memberId: string) { const invoiceRows = await ((db.select().from(invoices)).where(and(eq(invoices.gymId, gymId), eq(invoices.memberId, memberId)))).orderBy(desc(invoices.issuedAt)); const paymentRows = await ((db.select().from(payments)).where(and(eq(payments.gymId, gymId), eq(payments.memberId, memberId)))).orderBy(desc(payments.paidAt)); return { invoices: invoiceRows, payments: paymentRows, total: roundMoney(invoiceRows.reduce((sum, row) => sum + row.total, 0)), paid: roundMoney(paymentRows.reduce((sum, row) => sum + row.amount, 0)), outstanding: roundMoney(invoiceRows.reduce((sum, row) => sum + row.balance, 0)) }; }

@@ -1,0 +1,1 @@
+export default function Loading(){return <div className="content" aria-busy="true" aria-live="polite"><div className="page-head"><div><div className="eyebrow">Loading workspace</div><h1>Getting things ready…</h1><p>Please wait while the latest gym information loads.</p></div></div><div className="loading-grid"><span/><span/><span/><span/></div></div>}

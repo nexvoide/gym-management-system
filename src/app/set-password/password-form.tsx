@@ -1,0 +1,4 @@
+"use client";
+import { useActionState } from "react";
+import { setPassword } from "./actions";
+export function PasswordForm({token,recovery=false}:{token?:string;recovery?:boolean}){const [state,action,pending]=useActionState(setPassword,{});return <form action={action}><input type="hidden" name="token" value={token??""}/><input type="hidden" name="recovery" value={recovery?"1":"0"}/>{state.error&&<div className="error">{state.error}</div>}<div className="field"><label htmlFor="password">New password</label><input className="input" id="password" name="password" type="password" autoComplete="new-password" required/></div><div className="field"><label htmlFor="confirmPassword">Confirm password</label><input className="input" id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required/></div><button className="btn btn-primary btn-block" disabled={pending}>{pending?"Securing account…":"Set password and continue"}</button></form>}

@@ -1,0 +1,3 @@
+import {expect,type Page} from "@playwright/test";export const PASSWORD="BrowserQA2026!";
+export async function login(page:Page,email:string){await page.goto("/login");await page.getByLabel("Email address").fill(email);await page.getByLabel("Password").fill(PASSWORD);await page.getByRole("button",{name:/sign in/i}).click();await expect(page).toHaveURL(/\/dashboard/);await expect(page.getByRole("heading",{name:/Good day,/})).toBeVisible()}
+export async function expectNoOverflow(page:Page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true)}

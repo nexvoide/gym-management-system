@@ -1,0 +1,4 @@
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import { RegisterForm } from "./register-form";
+export default async function RegisterPage(){if(await getCurrentUser())redirect("/dashboard");return <main className="auth-page"><section className="auth-story"><div className="brand"><span className="brand-mark">F</span><span>Form</span></div><div className="story-copy"><div className="story-kicker">Your gym, ready in minutes</div><h1>Build the calm<br/>behind the work.</h1><p>Create a private workspace for your members, staff, attendance, and operations.</p></div><small style={{color:"var(--text-secondary)"}}>Every gym starts with an isolated workspace.</small></section><section className="auth-panel"><div className="auth-card" style={{maxWidth:620}}><h2>Create your gym</h2><p className="muted">Set up your owner account and workspace.</p><RegisterForm/></div></section></main>}

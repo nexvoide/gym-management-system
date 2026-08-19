@@ -1,0 +1,2 @@
+import Link from "next/link"; import { ShieldX } from "lucide-react";
+export default function Page(){return <div className="content"><div className="card placeholder"><div><div className="placeholder-icon"><ShieldX size={24}/></div><h2>Access restricted</h2><p>Your role doesn’t include permission to view this area.</p><Link className="btn btn-primary" style={{marginTop:18}} href="/dashboard">Back to dashboard</Link></div></div></div>}

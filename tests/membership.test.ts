@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { db } from "../src/db";
+import { membershipHistory, memberships } from "../src/db/schema";
+import { finalPrice, freezeDays, invoiceStatus, renewalWindow } from "../src/lib/membership";
+test("discounts cannot make a membership total negative", () => { assert.equal(finalPrice(100, 10), 90); assert.equal(finalPrice(100, 150), 0); assert.equal(finalPrice(100, -5), 100); });
+test("invoice status follows the calculated balance", () => { assert.equal(invoiceStatus(90, 0), "unpaid"); assert.equal(invoiceStatus(90, 50), "partially_paid"); assert.equal(invoiceStatus(90, 90), "paid"); });
+test("renewal begins after an existing future term", () => { const currentEnd = new Date(2026, 8, 18); const result = renewalWindow(new Date(2026, 7, 18), 30, currentEnd); assert.deepEqual([result.startsAt.getFullYear(), result.startsAt.getMonth(), result.startsAt.getDate()], [2026, 8, 18]); assert.deepEqual([result.endsAt.getFullYear(), result.endsAt.getMonth(), result.endsAt.getDate()], [2026, 9, 18]); });
+test("freeze extension reflects the selected paused period", () => { assert.equal(freezeDays(new Date("2026-08-18"), new Date("2026-08-28")), 10); });
+test("Phase 3 migration preserved existing memberships and added history", async () => { assert.ok((await db.select().from(memberships)).length >= 56); assert.ok((await db.select().from(membershipHistory)).length >= 56); });

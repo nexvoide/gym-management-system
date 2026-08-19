@@ -1,0 +1,2 @@
+import { requirePermission } from "@/lib/auth";import { MembershipPlanForm } from "@/components/membership-plan-form";import { createPlan } from "../../actions";
+export default async function Page(){await requirePermission("memberships.write");return <div className="content content-narrow"><div className="page-head"><div><div className="eyebrow">Membership plans</div><h1>Create a plan</h1><p>Define a reusable duration and price without unnecessary complexity.</p></div></div><MembershipPlanForm action={createPlan}/></div>}
