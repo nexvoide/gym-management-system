@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/db/index";
-import { auditLogs, gyms, members, rolePermissions, roles, settings, trainers, users } from "../src/db/schema";
+import { auditLogs, gyms, members, membershipPlans, rolePermissions, roles, settings, trainers, users } from "../src/db/schema";
 import { rolePermissionMap, permissionKeys } from "../src/lib/permissions";
 import { eq } from "drizzle-orm";
 import { registerGym } from "../src/lib/accounts";
@@ -28,12 +28,17 @@ test("registration creates an isolated gym and owner defaults", async () => {
         assert.equal(gym?.timezone, "Europe/London");
         assert.deepEqual(owner, { gymId: created.gymId, role: "owner" });
         assert.equal((await (db.select().from(settings)).where(eq(settings.gymId, created.gymId))).length, 4);
+        const standard = await (db.select().from(membershipPlans)).where(eq(membershipPlans.gymId, created.gymId));
+        assert.equal(standard.length, 1);
+        assert.equal(standard[0]?.name, "Standard");
+        assert.equal(standard[0]?.price, 0);
     }
     finally {
         const roleRows = await (db.select({ id: roles.id }).from(roles)).where(eq(roles.gymId, created.gymId));
         await db.transaction(async (tx) => {
             await (tx.delete(auditLogs)).where(eq(auditLogs.gymId, created.gymId));
             await (tx.delete(settings)).where(eq(settings.gymId, created.gymId));
+            await (tx.delete(membershipPlans)).where(eq(membershipPlans.gymId, created.gymId));
             await (tx.delete(users)).where(eq(users.gymId, created.gymId));
             for (const role of roleRows)
                 await (tx.delete(rolePermissions)).where(eq(rolePermissions.roleId, role.id));

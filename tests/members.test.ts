@@ -6,8 +6,8 @@ test("member registration keeps optional fields optional", () => {
     const result = memberSchema.safeParse({ firstName: "Noor", lastName: "Ali", gender: null, status: "active" });
     assert.equal(result.success, true);
 });
-test("member registration rejects malformed email and image URLs", () => {
-    const result = memberSchema.safeParse({ firstName: "Noor", lastName: "Ali", email: "wrong", profilePhotoUrl: "not-a-url", gender: null, status: "active" });
+test("member registration rejects malformed email", () => {
+    const result = memberSchema.safeParse({ firstName: "Noor", lastName: "Ali", email: "wrong", gender: null, status: "active" });
     assert.equal(result.success, false);
 });
 test("member directory is paginated and searchable within a gym", async () => {

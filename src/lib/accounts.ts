@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hash } from "bcryptjs";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { auditLogs, gyms, passwordTokens, permissions, rolePermissions, roles, settings, trainers, users, type RoleKey } from "@/db/schema";
+import { auditLogs, gyms, membershipPlans, passwordTokens, permissions, rolePermissions, roles, settings, trainers, users, type RoleKey } from "@/db/schema";
 import { permissionKeys, rolePermissionMap } from "./permissions";
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 export const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/;
@@ -45,6 +45,11 @@ export async function registerGym(input: {
         const base = input.gymName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "gym";
         await tx.insert(gyms).values({ id: gymId, name: input.gymName, slug: `${base}-${gymId.slice(0, 8)}`, country: input.country, currency: input.currency, timezone: input.timezone, locale: input.country === "PK" ? "en-PK" : "en-US" });
         const roleIds = await installDefaultRoles(tx, gymId);
+        await tx.insert(membershipPlans).values({
+            id: randomUUID(), gymId, name: "Standard",
+            description: "Default membership for new members",
+            durationDays: 30, price: 0, active: true,
+        });
         await tx.insert(users).values({ id: userId, gymId, roleId: roleIds.owner, name: `${input.firstName} ${input.lastName}`, email, passwordHash });
         const defaults = [
             ["membership", "expiry_warning_days", [30, 7, 1]], ["membership", "freeze_rules", { extendExpiry: true, maxDays: 30 }],

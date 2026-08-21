@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: { typedEnv: true },
+  experimental: { typedEnv: true, serverActions: { bodySizeLimit: "6mb" } },
   poweredByHeader: false,
   async headers() {
     return [{ source: "/(.*)", headers: [
