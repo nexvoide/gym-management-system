@@ -23,7 +23,9 @@ test("Phase 10.2 UI and durable idempotency are wired", async () => {
   const [settings, schema, layout, menu] = await Promise.all([
     readFile("src/app/(app)/settings/page.tsx", "utf8"), readFile("src/db/schema.ts", "utf8"), readFile("src/app/(app)/layout.tsx", "utf8"), readFile("src/components/member-communication-menu.tsx", "utf8"),
   ]);
-  for (const label of ["Midnight", "Slate", "Light", "WhatsApp number", "Automatically send a welcome email"]) assert.match(settings, new RegExp(label));
+  for (const label of ["WhatsApp number", "Automatically send a welcome email"]) assert.match(settings, new RegExp(label));
+  const selector = await readFile("src/components/theme-selector.tsx", "utf8");
+  for (const label of ["Midnight", "Titanium", "Carbon", "Premium dark", "Clean light", "Athletic dark"]) assert.match(selector, new RegExp(label));
   assert.match(schema, /communication_logs/); assert.match(schema, /communication_logs_gym_dedupe_unique/); assert.match(layout, /communications:expiry/);
   assert.equal((menu.match(/> Email</g) ?? []).length, 1); assert.equal((menu.match(/> WhatsApp</g) ?? []).length, 1); assert.match(menu, /Welcome message/); assert.match(menu, /Expiry reminder/);
 });

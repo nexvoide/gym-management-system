@@ -7,7 +7,7 @@ const timestamps = {
 
 export const gyms = pgTable("gyms", {
   id: text("id").primaryKey(), name: text("name").notNull(), slug: text("slug").notNull().unique(),
-  phone: text("phone"), email: text("email"), address: text("address"), website: text("website"), whatsappPhone: text("whatsapp_phone"), logoUrl: text("logo_url"), skin: text("skin", { enum: ["midnight","slate","light"] }).notNull().default("midnight"), autoWelcomeEmail: boolean("auto_welcome_email").notNull().default(true), expiryRemindersEnabled: boolean("expiry_reminders_enabled").notNull().default(true), expiryReminderDays: jsonb("expiry_reminder_days").notNull().default([7,3]),
+  phone: text("phone"), email: text("email"), address: text("address"), website: text("website"), whatsappPhone: text("whatsapp_phone"), logoUrl: text("logo_url"), skin: text("skin", { enum: ["midnight","titanium","carbon"] }).notNull().default("midnight"), autoWelcomeEmail: boolean("auto_welcome_email").notNull().default(true), expiryRemindersEnabled: boolean("expiry_reminders_enabled").notNull().default(true), expiryReminderDays: jsonb("expiry_reminder_days").notNull().default([7,3]),
   country: text("country").notNull().default("US"),
   timezone: text("timezone").notNull().default("UTC"), currency: text("currency").notNull().default("USD"),
   locale: text("locale").notNull().default("en"), dateFormat: text("date_format").notNull().default("medium"), firstDayOfWeek: integer("first_day_of_week").notNull().default(1),

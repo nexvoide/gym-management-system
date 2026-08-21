@@ -16,9 +16,9 @@ export async function updateGymProfile(formData: FormData) {
   await db.transaction(async (tx) => { await tx.update(gyms).set({ ...result.data, updatedAt: new Date() }).where(eq(gyms.id, user.gymId)); await tx.insert(auditLogs).values({ id: crypto.randomUUID(), gymId: user.gymId, userId: user.id, action: "settings.updated", entityType: "gym", entityId: user.gymId, metadata: { fields: Object.keys(result.data) } }); });
   revalidatePath("/settings");
 }
-export async function updateAppearance(formData: FormData) {
+export async function updateAppearance(skinValue: string) {
   const user = await requirePermission("settings.write"); if (user.role !== "owner") throw new Error("Only the gym owner can change branding.");
-  const skin = z.enum(["midnight", "slate", "light"]).parse(formData.get("skin"));
+  const skin = z.enum(["midnight", "titanium", "carbon"]).parse(skinValue);
   await db.update(gyms).set({ skin, updatedAt: new Date() }).where(eq(gyms.id, user.gymId));
   await db.insert(auditLogs).values({ id: crypto.randomUUID(), gymId: user.gymId, userId: user.id, action: "branding.skin_updated", entityType: "gym", entityId: user.gymId, metadata: { skin } }); revalidatePath("/", "layout");
 }
