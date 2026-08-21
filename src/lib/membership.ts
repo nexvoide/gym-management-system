@@ -1,9 +1,18 @@
-import { addDays, differenceInCalendarDays, startOfDay } from "date-fns";
-
-export function renewalWindow(start:Date,durationDays:number,currentEnd?:Date|null){
-  const requested=startOfDay(start); const effectiveStart=currentEnd&&currentEnd>requested?startOfDay(currentEnd):requested;
-  return {startsAt:effectiveStart,endsAt:addDays(effectiveStart,durationDays)};
-}
-export function freezeDays(start:Date,end:Date){return Math.max(1,differenceInCalendarDays(startOfDay(end),startOfDay(start)));}
-export function finalPrice(basePrice:number,discount:number){const total=Math.round((basePrice-Math.min(Math.max(discount,0),basePrice))*100)/100;return Math.max(0,total)}
+import { addDays, addMonths, addWeeks, addYears, differenceInCalendarDays, startOfDay } from "date-fns";
+export const durationUnits = ["days", "weeks", "months", "years"] as const;
+export type DurationUnit = (typeof durationUnits)[number];
+export type DiscountType = "fixed" | "percentage";
+export function addPlanDuration(start:Date,duration:number,unit:DurationUnit){if(!Number.isInteger(duration)||duration<1)throw new Error("Invalid membership duration.");if(unit==="days")return addDays(start,duration);if(unit==="weeks")return addWeeks(start,duration);if(unit==="months")return addMonths(start,duration);return addYears(start,duration)}
+// Calendar-month rule: a missing target date clamps to that month's final day.
+export function renewalWindow(start:Date,duration:number,unitOrCurrentEnd:DurationUnit|Date|null="days",currentEnd?:Date|null){const unit=unitOrCurrentEnd instanceof Date||unitOrCurrentEnd===null?"days":unitOrCurrentEnd,end=unitOrCurrentEnd instanceof Date?unitOrCurrentEnd:currentEnd,requested=new Date(start),effectiveStart=end&&end>requested?new Date(end):requested;return{startsAt:effectiveStart,endsAt:addPlanDuration(effectiveStart,duration,unit)}}
+export function freezeDays(start:Date,end:Date){return Math.max(1,differenceInCalendarDays(startOfDay(end),startOfDay(start)))}
+export function currencyFractionDigits(currency:string){try{return new Intl.NumberFormat("en",{style:"currency",currency}).resolvedOptions().maximumFractionDigits??2}catch{throw new Error("Invalid ISO 4217 currency code.")}}
+export function moneyToMinor(value:string|number,currency:string){const digits=currencyFractionDigits(currency),text=String(value).trim();if(!/^\d+(?:\.\d+)?$/.test(text))throw new Error("Invalid money amount.");const[whole,fraction=""]=text.split(".");if(fraction.length>digits)throw new Error(`Amount supports at most ${digits} decimal places.`);return BigInt(whole)*10n**BigInt(digits)+BigInt((fraction+"0".repeat(digits)).slice(0,digits)||"0")}
+export function minorToAmount(value:bigint,currency:string){return Number(value)/10**currencyFractionDigits(currency)}
+function percentageThousandths(value:string|number){const text=String(value).trim();if(!/^\d+(?:\.\d{1,3})?$/.test(text))throw new Error("Invalid percentage.");const[whole,fraction=""]=text.split("."),result=BigInt(whole)*1000n+BigInt((fraction+"000").slice(0,3));if(result>100000n)throw new Error("Percentage must be between 0 and 100.");return result}
+export function calculateCharges(input:{price:string|number;signupFee?:string|number;discountType:DiscountType;discountValue:string|number;taxPercentage?:string|number;currency:string}){const price=moneyToMinor(input.price,input.currency),signupFee=moneyToMinor(input.signupFee??0,input.currency),subtotal=price+signupFee;const discount=input.discountType==="percentage"?(subtotal*percentageThousandths(input.discountValue)+50000n)/100000n:moneyToMinor(input.discountValue,input.currency);if(discount>subtotal)throw new Error("Discount cannot exceed the subtotal.");const taxable=subtotal-discount,taxRate=percentageThousandths(input.taxPercentage??0),tax=(taxable*taxRate+50000n)/100000n;return{subtotal:minorToAmount(subtotal,input.currency),discount:minorToAmount(discount,input.currency),tax:minorToAmount(tax,input.currency),total:minorToAmount(taxable+tax,input.currency)}}
+export function finalPrice(basePrice:number,discount:number){try{return calculateCharges({price:basePrice,discountType:"fixed",discountValue:Math.max(0,discount),currency:"USD"}).total}catch{return 0}}
 export function invoiceStatus(total:number,paid:number){if(paid<=0)return "unpaid" as const;if(paid>=total)return "paid" as const;return "partially_paid" as const}
+export function membershipStatus(startsAt:Date,endsAt:Date,stored:"pending"|"active"|"frozen"|"expired"|"cancelled",now=new Date()){if(stored==="cancelled"||stored==="frozen")return stored;if(startsAt>now)return"pending" as const;if(endsAt<=now)return"expired" as const;return"active" as const}
+export function formatMoney(amount:number,currency:string,locale="en"){return new Intl.NumberFormat(locale,{style:"currency",currency}).format(amount)}
+export function formatDate(value:Date,locale="en",timeZone="UTC",options:Intl.DateTimeFormatOptions={dateStyle:"medium"}){return new Intl.DateTimeFormat(locale,{...options,timeZone}).format(value)}

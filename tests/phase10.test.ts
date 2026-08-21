@@ -32,7 +32,9 @@ test("member photo paths are tenant scoped and reject traversal", () => {
 test("new gyms and existing gyms receive one non-billable Standard default without deleting custom plans", () => {
   const accounts = readFileSync("src/lib/accounts.ts", "utf8");
   assert.match(accounts, /name: "Standard"/);
-  assert.match(accounts, /durationDays: 30, price: 0/);
+  assert.match(accounts, /duration: 1, durationUnit: "months"/);
+  assert.match(accounts, /durationDays: 30/);
+  assert.match(accounts, /price: 0/);
   assert.match(migration, /where not exists[\s\S]*lower\(mp\.name\) = 'standard'/);
   assert.doesNotMatch(migration, /delete from public\.membership_plans/i);
 });
@@ -42,7 +44,7 @@ test("member creation assigns the tenant Standard membership and preserves price
   assert.match(actions, /ilike\(membershipPlans\.name, "Standard"\)/);
   assert.match(actions, /tx\.insert\(memberships\)/);
   assert.match(actions, /planId: plan\.id/);
-  assert.match(actions, /if \(plan\.price > 0\)/);
+  assert.match(actions, /if \(charges\.total > 0\)/);
   assert.ok(actions.indexOf("tx.insert(members).values") < actions.indexOf("tx.insert(memberships).values"));
 });
 

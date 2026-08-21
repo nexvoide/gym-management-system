@@ -43,12 +43,13 @@ export async function registerGym(input: {
     const gymId = randomUUID(), userId = randomUUID(), passwordHash = await hash(input.password, 12);
     await db.transaction(async (tx) => {
         const base = input.gymName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "gym";
-        await tx.insert(gyms).values({ id: gymId, name: input.gymName, slug: `${base}-${gymId.slice(0, 8)}`, country: input.country, currency: input.currency, timezone: input.timezone, locale: input.country === "PK" ? "en-PK" : "en-US" });
+        const locales: Record<string, string> = { US: "en-US", GB: "en-GB", AE: "en-AE", SA: "ar-SA", DE: "de-DE", PK: "en-PK", CA: "en-CA", AU: "en-AU", SG: "en-SG", MY: "ms-MY" };
+        await tx.insert(gyms).values({ id: gymId, name: input.gymName, slug: `${base}-${gymId.slice(0, 8)}`, country: input.country, currency: input.currency, timezone: input.timezone, locale: locales[input.country] ?? "en-US" });
         const roleIds = await installDefaultRoles(tx, gymId);
         await tx.insert(membershipPlans).values({
             id: randomUUID(), gymId, name: "Standard",
             description: "Default membership for new members",
-            durationDays: 30, price: 0, active: true,
+            durationDays: 30, duration: 1, durationUnit: "months", currency: input.currency, price: 0, active: true,
         });
         await tx.insert(users).values({ id: userId, gymId, roleId: roleIds.owner, name: `${input.firstName} ${input.lastName}`, email, passwordHash });
         const defaults = [
