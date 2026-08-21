@@ -1,8 +1,8 @@
 "use server";
-import { and, count, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { auditLogs, gyms, invoiceItems, invoices, members, membershipHistory, membershipPlans, memberships, trainers } from "@/db/schema";
+import { attendance, auditLogs, gyms, invoiceItems, invoices, members, membershipFreezes, membershipHistory, membershipPlans, memberships, notifications, payments, trainers } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { memberPhotoError, removeMemberPhoto, uploadMemberPhoto } from "@/lib/member-photos";
 import { memberInputFromForm } from "@/lib/member-validation";
@@ -94,4 +94,30 @@ export async function updateMember(memberId: string, _: MemberFormState, formDat
         catch (error) { logger.error("member.old_photo_remove_failed", error, { gymId: user.gymId, memberId }); }
     }
     redirect(`/members/${memberId}`);
+}
+
+export async function permanentlyDeleteMember(memberId: string): Promise<void> {
+    const user = await requirePermission("members.write");
+    if (user.role !== "owner") throw new Error("Only the gym owner can permanently delete members.");
+    const member = (await db.select({ id: members.id, profilePhotoUrl: members.profilePhotoUrl }).from(members).where(and(eq(members.id, memberId), eq(members.gymId, user.gymId))))[0];
+    if (!member) redirect("/members");
+    const memberInvoices = db.select({ id: invoices.id }).from(invoices).where(and(eq(invoices.gymId, user.gymId), eq(invoices.memberId, memberId)));
+    const memberMemberships = db.select({ id: memberships.id }).from(memberships).where(and(eq(memberships.gymId, user.gymId), eq(memberships.memberId, memberId)));
+    await db.transaction(async (tx) => {
+        await tx.delete(payments).where(and(eq(payments.gymId, user.gymId), eq(payments.memberId, memberId)));
+        await tx.delete(invoiceItems).where(inArray(invoiceItems.invoiceId, memberInvoices));
+        await tx.delete(invoices).where(and(eq(invoices.gymId, user.gymId), eq(invoices.memberId, memberId)));
+        await tx.delete(attendance).where(and(eq(attendance.gymId, user.gymId), eq(attendance.memberId, memberId)));
+        await tx.delete(membershipFreezes).where(inArray(membershipFreezes.membershipId, memberMemberships));
+        await tx.delete(membershipHistory).where(and(eq(membershipHistory.gymId, user.gymId), eq(membershipHistory.memberId, memberId)));
+        await tx.delete(memberships).where(and(eq(memberships.gymId, user.gymId), eq(memberships.memberId, memberId)));
+        await tx.delete(notifications).where(and(eq(notifications.gymId, user.gymId), eq(notifications.entityId, memberId)));
+        await tx.delete(auditLogs).where(and(eq(auditLogs.gymId, user.gymId), eq(auditLogs.entityId, memberId)));
+        await tx.delete(members).where(and(eq(members.id, memberId), eq(members.gymId, user.gymId)));
+    });
+    if (member.profilePhotoUrl) {
+        try { await removeMemberPhoto(member.profilePhotoUrl, user.gymId); }
+        catch (error) { logger.error("member.deleted_photo_cleanup_failed", error, { gymId: user.gymId, memberId }); }
+    }
+    redirect("/members?deleted=1");
 }
