@@ -6,6 +6,7 @@ export const memberSchema = z.object({
   dateOfBirth:z.string().optional().transform(v=>v?new Date(`${v}T00:00:00`):null),
   gender:z.enum(["female","male","non_binary","prefer_not_to_say"]).nullable().optional(), phone:optionalText(30),
   email:z.union([z.literal(""),z.email("Enter a valid email address.")]).optional().transform(v=>v?.toLowerCase()||null), address:optionalText(240),
+  emailNotificationsEnabled:z.preprocess(v=>v==="on",z.boolean()), whatsappNotificationsEnabled:z.preprocess(v=>v==="on",z.boolean()),
   emergencyContactName:optionalText(100), emergencyContactRelationship:optionalText(60), emergencyContactPhone:optionalText(30), notes:optionalText(1000),
   trainerId:optionalText(100), status:z.enum(["active","frozen","cancelled"]).default("active"),
 });

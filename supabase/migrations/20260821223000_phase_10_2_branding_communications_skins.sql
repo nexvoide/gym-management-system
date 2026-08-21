@@ -13,6 +13,9 @@ create table if not exists public.communication_logs(
  kind text not null check(kind in ('welcome','expiry_7','expiry_3','expiry_1')),channel text not null check(channel in ('email','whatsapp_manual')),status text not null check(status in ('claimed','sent','failed','opened')),dedupe_key text not null,recipient text,sent_at timestamptz,created_by text references public.users(id),created_at timestamptz not null default now(),unique(gym_id,dedupe_key)
 );
 create index if not exists communication_logs_member_idx on public.communication_logs(gym_id,member_id,created_at desc);
+create index if not exists communication_logs_member_fk_idx on public.communication_logs(member_id);
+create index if not exists communication_logs_membership_fk_idx on public.communication_logs(membership_id);
+create index if not exists communication_logs_created_by_fk_idx on public.communication_logs(created_by);
 alter table public.communication_logs enable row level security;
 
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) values('gym-branding','gym-branding',false,5242880,array['image/jpeg','image/png','image/webp']::text[]) on conflict(id) do update set public=false,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;

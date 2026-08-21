@@ -8,6 +8,7 @@ import { memberPhotoError, removeMemberPhoto, uploadMemberPhoto } from "@/lib/me
 import { memberInputFromForm } from "@/lib/member-validation";
 import { logger } from "@/lib/logger";
 import { addPlanDuration, calculateCharges } from "@/lib/membership";
+import { sendMemberWelcomeEmail } from "@/lib/member-communication-service";
 export type MemberFormState = {
     error?: string;
     fields?: Record<string, string[]>;
@@ -53,7 +54,7 @@ export async function createMember(_: MemberFormState, formData: FormData): Prom
             if (charges.total > 0) {
                 const invoiceSequence = ((await (tx.select({ value: count() }).from(invoices)).where(eq(invoices.gymId, user.gymId)))[0]?.value ?? 0) + 1;
                 const invoiceId = crypto.randomUUID(), invoiceNumber = `INV-${new Date().getFullYear()}-${String(invoiceSequence).padStart(5, "0")}`;
-                await tx.insert(invoices).values({ id: invoiceId, gymId: user.gymId, memberId: id, membershipId, invoiceNumber, currency: plan.currency, memberName: `${parsed.data.firstName} ${parsed.data.lastName}`, memberNumberSnapshot: memberNumber, memberEmail: parsed.data.email, memberPhone: parsed.data.phone, gymName: gym.name, gymAddress: gym.address, gymEmail: gym.email, gymPhone: gym.phone, issuedAt: startsAt, dueAt: startsAt, subtotal: charges.subtotal, discount: charges.discount, taxName: gym.taxEnabled ? gym.taxName : null, taxRate: gym.taxEnabled ? gym.taxPercentage : 0, tax: charges.tax, total: charges.total, paid: 0, balance: charges.total, status: "unpaid" });
+                await tx.insert(invoices).values({ id: invoiceId, gymId: user.gymId, memberId: id, membershipId, invoiceNumber, currency: plan.currency, memberName: `${parsed.data.firstName} ${parsed.data.lastName}`, memberNumberSnapshot: memberNumber, memberEmail: parsed.data.email, memberPhone: parsed.data.phone, gymName: gym.name, gymAddress: gym.address, gymEmail: gym.email, gymPhone: gym.phone, gymLogoSnapshot: gym.logoUrl, issuedAt: startsAt, dueAt: startsAt, subtotal: charges.subtotal, discount: charges.discount, taxName: gym.taxEnabled ? gym.taxName : null, taxRate: gym.taxEnabled ? gym.taxPercentage : 0, tax: charges.tax, total: charges.total, paid: 0, balance: charges.total, status: "unpaid" });
                 await tx.insert(invoiceItems).values({ id: crypto.randomUUID(), invoiceId, description: `${plan.name} membership`, quantity: 1, unitPrice: plan.price, amount: plan.price });
                 if (plan.signupFee > 0) await tx.insert(invoiceItems).values({ id: crypto.randomUUID(), invoiceId, description: "Signup fee", quantity: 1, unitPrice: plan.signupFee, amount: plan.signupFee });
             }
@@ -65,6 +66,8 @@ export async function createMember(_: MemberFormState, formData: FormData): Prom
         logger.error("member.create_failed", error, { gymId: user.gymId, memberId: id });
         return { error: "This member could not be created. Check that the email and phone are correct." };
     }
+    const communication = (await db.select({ enabled: gyms.autoWelcomeEmail }).from(gyms).where(eq(gyms.id, user.gymId)))[0];
+    if (communication?.enabled) await sendMemberWelcomeEmail(user.gymId, id, user.id);
     redirect(`/members/${id}`);
 }
 export async function updateMember(memberId: string, _: MemberFormState, formData: FormData): Promise<MemberFormState> {
