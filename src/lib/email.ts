@@ -41,3 +41,5 @@ export async function sendStaffInvitation(
   const mailer = transport ?? nodemailer.createTransport({ host: config.host, port: config.port, secure: config.secure, auth: config.auth });
   await mailer.sendMail({ ...staffInvitationMessage(input), from: config.from });
 }
+
+export async function sendApplicationEmail(message:{to:string;subject:string;text:string;html:string},transport?:MailTransport){const config=smtpConfigFrom(process.env);const mailer=transport??nodemailer.createTransport({host:config.host,port:config.port,secure:config.secure,auth:config.auth});await mailer.sendMail({...message,from:config.from})}

@@ -7,7 +7,7 @@ const timestamps = {
 
 export const gyms = pgTable("gyms", {
   id: text("id").primaryKey(), name: text("name").notNull(), slug: text("slug").notNull().unique(),
-  phone: text("phone"), email: text("email"), address: text("address"), logoUrl: text("logo_url"),
+  phone: text("phone"), email: text("email"), address: text("address"), website: text("website"), whatsappPhone: text("whatsapp_phone"), logoUrl: text("logo_url"), skin: text("skin", { enum: ["midnight","slate","light"] }).notNull().default("midnight"), autoWelcomeEmail: boolean("auto_welcome_email").notNull().default(true), expiryRemindersEnabled: boolean("expiry_reminders_enabled").notNull().default(true), expiryReminderDays: jsonb("expiry_reminder_days").notNull().default([7,3]),
   country: text("country").notNull().default("US"),
   timezone: text("timezone").notNull().default("UTC"), currency: text("currency").notNull().default("USD"),
   locale: text("locale").notNull().default("en"), dateFormat: text("date_format").notNull().default("medium"), firstDayOfWeek: integer("first_day_of_week").notNull().default(1),
@@ -86,12 +86,16 @@ export const notificationReads = pgTable("notification_reads", {
   readAt: timestamp("read_at", { withTimezone: true, mode: "date" }).notNull().$defaultFn(() => new Date()),
 }, (t) => [uniqueIndex("notification_reads_unique").on(t.notificationId, t.userId), index("notification_reads_user_idx").on(t.userId, t.readAt)]);
 
+export const communicationLogs = pgTable("communication_logs", {
+  id:text("id").primaryKey(),gymId:text("gym_id").notNull().references(()=>gyms.id,{onDelete:"cascade"}),memberId:text("member_id").notNull(),membershipId:text("membership_id"),kind:text("kind",{enum:["welcome","expiry_7","expiry_3","expiry_1"]}).notNull(),channel:text("channel",{enum:["email","whatsapp_manual"]}).notNull(),status:text("status",{enum:["claimed","sent","failed","opened"]}).notNull(),dedupeKey:text("dedupe_key").notNull(),recipient:text("recipient"),sentAt:timestamp("sent_at",{withTimezone:true,mode:"date"}),createdBy:text("created_by").references(()=>users.id),createdAt:timestamp("created_at",{withTimezone:true,mode:"date"}).notNull().$defaultFn(()=>new Date()),
+},t=>[uniqueIndex("communication_logs_gym_dedupe_unique").on(t.gymId,t.dedupeKey),index("communication_logs_member_idx").on(t.gymId,t.memberId,t.createdAt)]);
+
 export const trainers = pgTable("trainers", { id: text("id").primaryKey(), gymId: text("gym_id").notNull().references(() => gyms.id), userId:text("user_id").references(()=>users.id,{onDelete:"set null"}), name: text("name").notNull(), photoUrl:text("photo_url"),phone:text("phone"),email:text("email"),specialization:text("specialization"),joiningDate:timestamp("joining_date", { withTimezone: true, mode: "date" }),salaryAmount:numeric("salary_amount",{precision:18,scale:3,mode:"number"}),salaryCurrency:text("salary_currency"),salaryPeriod:text("salary_period",{enum:["hourly","per_session","weekly","monthly"]}),status: text("status",{enum:["active","inactive"]}).notNull().default("active"),notes:text("notes"),archivedAt:timestamp("archived_at", { withTimezone: true, mode: "date" }), ...timestamps },(t)=>[index("trainers_gym_status_idx").on(t.gymId,t.status),uniqueIndex("trainers_user_unique").on(t.userId)]);
 export const members = pgTable("members", {
   id: text("id").primaryKey(), gymId: text("gym_id").notNull().references(() => gyms.id), memberNumber: text("member_number").notNull(),
   firstName: text("first_name").notNull(), lastName: text("last_name").notNull(), profilePhotoUrl: text("profile_photo_url"),
   dateOfBirth: timestamp("date_of_birth", { withTimezone: true, mode: "date" }), gender: text("gender", { enum: ["female", "male", "non_binary", "prefer_not_to_say"] }),
-  phone: text("phone"), email: text("email"), address: text("address"), notes: text("notes"),
+  phone: text("phone"), email: text("email"), emailNotificationsEnabled:boolean("email_notifications_enabled").notNull().default(true),whatsappNotificationsEnabled:boolean("whatsapp_notifications_enabled").notNull().default(true),address: text("address"), notes: text("notes"),
   emergencyContactName: text("emergency_contact_name"), emergencyContactRelationship: text("emergency_contact_relationship"), emergencyContactPhone: text("emergency_contact_phone"),
   trainerId: text("trainer_id").references(() => trainers.id, { onDelete: "set null" }), status: text("status", { enum: ["active", "frozen", "cancelled"] }).notNull().default("active"),
   archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }), ...timestamps,
@@ -119,7 +123,7 @@ export const membershipFreezes = pgTable("membership_freezes",{
 },(t)=>[index("membership_freezes_membership_idx").on(t.membershipId,t.startDate)]);
 export const invoices=pgTable("invoices",{
   id:text("id").primaryKey(),gymId:text("gym_id").notNull().references(()=>gyms.id),memberId:text("member_id").notNull().references(()=>members.id),membershipId:text("membership_id").references(()=>memberships.id),invoiceNumber:text("invoice_number").notNull(),
-  currency:text("currency").notNull().default("USD"),memberName:text("member_name").notNull().default(""),memberNumberSnapshot:text("member_number_snapshot").notNull().default(""),memberEmail:text("member_email"),memberPhone:text("member_phone"),gymName:text("gym_name").notNull().default(""),gymAddress:text("gym_address"),gymEmail:text("gym_email"),gymPhone:text("gym_phone"),
+  currency:text("currency").notNull().default("USD"),memberName:text("member_name").notNull().default(""),memberNumberSnapshot:text("member_number_snapshot").notNull().default(""),memberEmail:text("member_email"),memberPhone:text("member_phone"),gymName:text("gym_name").notNull().default(""),gymAddress:text("gym_address"),gymEmail:text("gym_email"),gymPhone:text("gym_phone"),gymLogoSnapshot:text("gym_logo_snapshot"),
   issuedAt:timestamp("issued_at", { withTimezone: true, mode: "date" }).notNull(),dueAt:timestamp("due_at", { withTimezone: true, mode: "date" }).notNull(),subtotal:numeric("subtotal",{precision:18,scale:3,mode:"number"}).notNull(),discount:numeric("discount",{precision:18,scale:3,mode:"number"}).notNull().default(0),taxName:text("tax_name"),taxRate:numeric("tax_rate",{precision:6,scale:3,mode:"number"}).notNull().default(0),tax:numeric("tax",{precision:18,scale:3,mode:"number"}).notNull().default(0),total:numeric("total",{precision:18,scale:3,mode:"number"}).notNull(),paid:numeric("paid",{precision:18,scale:3,mode:"number"}).notNull().default(0),balance:numeric("balance",{precision:18,scale:3,mode:"number"}).notNull(),status:text("status",{enum:["paid","partially_paid","unpaid","overdue","refunded"]}).notNull(),notes:text("notes"),...timestamps,
 },(t)=>[uniqueIndex("invoices_gym_number_unique").on(t.gymId,t.invoiceNumber),index("invoices_gym_member_idx").on(t.gymId,t.memberId)]);
 export const invoiceItems=pgTable("invoice_items",{

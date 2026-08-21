@@ -60,3 +60,5 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--primary)}
 .data-table tbody tr:hover{background:rgba(41,46,51,.45)}
 .card{box-shadow:0 1px 2px rgba(0,0,0,.20)}
 .notification-title span{color:var(--background)}
+[data-skin="slate"]{--background:#111827;--surface:#18212f;--card:#202b3a;--border:#344154;--primary:#60a5fa;--primary-hover:#3b82f6;--text-primary:#f8fafc;--text-secondary:#a8b3c4;--primary-tint:rgba(96,165,250,.12)}
+[data-skin="light"]{--background:#f4f6f8;--surface:#ffffff;--card:#ffffff;--border:#dce1e7;--primary:#2563eb;--primary-hover:#1d4ed8;--text-primary:#172033;--text-secondary:#64748b;--primary-tint:rgba(37,99,235,.10);--shadow:0 1px 2px rgba(15,23,42,.06),0 14px 40px rgba(15,23,42,.06)}
