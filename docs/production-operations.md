@@ -2,9 +2,11 @@
 
 ## Architecture and environment
 
-The production application is a Next.js 16 Node server using Supabase Auth SSR cookies and Drizzle over the Supabase transaction pooler. A specific hosting provider is not yet selected. Production must set `NODE_ENV=production`, `DATABASE_URL` (pooler port 6543), `DATABASE_POOL_SIZE`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and canonical HTTPS `APP_URL`.
+The production application is a Next.js 16 Node server using Supabase Auth SSR cookies and Drizzle over the Supabase transaction pooler. A specific hosting provider is not yet selected. Production must set `NODE_ENV=production`, `DATABASE_URL` (pooler port 6543), `DATABASE_POOL_SIZE`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, canonical HTTPS `APP_URL`, and the server-only mail variables `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, and `SMTP_FROM_NAME`.
 
 Never set a service-role key, database password, SMTP password, or private token in a `NEXT_PUBLIC_*` variable. Production has no SQLite fallback. E2E credentials and fixture setup must exist only in the test job.
+
+`SUPABASE_SECRET_KEY` is server-only and is used exclusively for authorized staff-account deletion through the Supabase Admin API. It must never be exposed to client code. Staff with immutable attendance or expense attribution cannot be deleted; deactivate them instead.
 
 ## Deployment and rollback
 
@@ -26,6 +28,8 @@ Logs are JSON and redact keys that look like passwords, tokens, cookies, secrets
 ## Supabase Auth and SMTP
 
 Set the Supabase Site URL to `APP_URL`; allow only required HTTPS redirect URLs. Configure confirmation/recovery email templates for the SSR callback and custom SMTP with a verified sender domain, SPF, DKIM, and DMARC. Test registration, invitation, and recovery delivery to a non-team mailbox. Until that succeeds, production SMTP is **not configured**.
+
+Staff invitations are sent directly by the server through the same Brevo SMTP account. `SMTP_FROM_EMAIL` must be a verified Brevo sender or belong to a verified sending domain. Invitation links are built exclusively from `APP_URL`; production must use the canonical HTTPS domain. SMTP credentials must never use a `NEXT_PUBLIC_` name.
 
 In Auth password settings, use at least 12 characters and enable leaked-password protection where the project plan supports it. Confirm Auth rate limits for signup, recovery, and token refresh. The application also applies shared PostgreSQL limits to login, registration, and recovery requests.
 

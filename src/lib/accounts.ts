@@ -7,6 +7,11 @@ import { permissionKeys, rolePermissionMap } from "./permissions";
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 export const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/;
 export const tokenDigest = (token: string) => createHash("sha256").update(token).digest("hex");
+export const staffSetupTokenLifetimeMs = 24 * 60 * 60 * 1000;
+export function generateStaffSetupToken(now = Date.now()) {
+    const token = randomBytes(32).toString("base64url");
+    return { token, tokenHash: tokenDigest(token), expiresAt: new Date(now + staffSetupTokenLifetimeMs) };
+}
 export async function installDefaultRoles(tx: Pick<typeof db, "insert">, gymId: string) {
     const roleIds = {} as Record<RoleKey, string>;
     for (const key of ["owner", "manager", "receptionist", "trainer"] as const) {
@@ -52,9 +57,12 @@ export async function registerGym(input: {
     return { userId, gymId };
 }
 export async function createStaffSetupToken(userId: string) {
-    const token = randomBytes(32).toString("base64url");
-    await db.insert(passwordTokens).values({ id: randomUUID(), userId, purpose: "staff_setup", tokenHash: tokenDigest(token), expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
-    return token;
+    const generated = generateStaffSetupToken();
+    await db.transaction(async (tx) => {
+        await (tx.update(passwordTokens).set({ usedAt: new Date() })).where(and(eq(passwordTokens.userId, userId), eq(passwordTokens.purpose, "staff_setup"), isNull(passwordTokens.usedAt)));
+        await tx.insert(passwordTokens).values({ id: randomUUID(), userId, purpose: "staff_setup", tokenHash: generated.tokenHash, expiresAt: generated.expiresAt });
+    });
+    return generated.token;
 }
 export async function validPasswordToken(token: string) {
     return (await (db.select({ id: passwordTokens.id, userId: passwordTokens.userId, purpose: passwordTokens.purpose }).from(passwordTokens)).where(and(eq(passwordTokens.tokenHash, tokenDigest(token)), gt(passwordTokens.expiresAt, new Date()), isNull(passwordTokens.usedAt))))[0] ?? null;

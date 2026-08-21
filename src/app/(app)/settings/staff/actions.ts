@@ -1,17 +1,31 @@
 "use server";
 import { randomBytes, randomUUID } from "node:crypto";
 import { hash } from "bcryptjs";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { auditLogs, roles, sessions, trainers, users } from "@/db/schema";
+import { attendance, auditLogs, expenses, gyms, roles, sessions, trainers, users } from "@/db/schema";
 import { createStaffSetupToken, ensureTrainerProfile, normalizeEmail } from "@/lib/accounts";
 import { requirePermission } from "@/lib/auth";
+import { sendStaffInvitation } from "@/lib/email";
+import { requireAppUrl } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { consumeLimit } from "@/lib/rate-limit";
+import { createAdminClient } from "@/lib/supabase/admin";
 export type StaffState = {
     error?: string;
-    setupPath?: string;
+    sent?: boolean;
 };
+
+function authDeleteFailure(error: unknown) {
+    if (error instanceof Error && error.message === "Supabase Admin is not configured.") return "auth-config";
+    const details = error as { status?: number; code?: string; message?: string };
+    if (details.status === 401 || details.status === 403) return "auth-unauthorized";
+    if (/storage|object owner|owns? objects?/i.test(details.message ?? "")) return "auth-storage";
+    return "auth-failed";
+}
 const createSchema = z.object({ name: z.string().trim().min(2).max(100), email: z.email(), role: z.enum(["manager", "receptionist", "trainer"]) });
 export async function createStaff(_: StaffState, data: FormData): Promise<StaffState> {
     const actor = await requirePermission("users.manage");
@@ -31,12 +45,34 @@ export async function createStaff(_: StaffState, data: FormData): Promise<StaffS
         if (parsed.data.role === "trainer")
             await ensureTrainerProfile(actor.gymId, id, parsed.data.name, email);
         const token = await createStaffSetupToken(id);
+        const gym = (await (db.select({ name: gyms.name }).from(gyms)).where(eq(gyms.id, actor.gymId)))[0];
+        try {
+            await sendStaffInvitation({ to: email, name: parsed.data.name, gymName: gym?.name ?? "your gym", role: parsed.data.role, setupUrl: `${requireAppUrl()}/set-password?token=${encodeURIComponent(token)}` });
+        } catch (error) {
+            logger.error("staff.invitation_send_failed", error, { userId: id, gymId: actor.gymId });
+            revalidatePath("/settings/staff");
+            return { error: "Staff account created, but the invitation email could not be sent. Please resend the invitation." };
+        }
         revalidatePath("/settings/staff");
-        return { setupPath: `/set-password?token=${encodeURIComponent(token)}` };
+        return { sent: true };
     }
     catch {
         return { error: "This staff account could not be created." };
     }
+}
+export async function resendStaffInvitation(userId: string) {
+    const actor = await requirePermission("users.manage");
+    const target = (await (((db.select({ id: users.id, name: users.name, email: users.email, active: users.active, mustChangePassword: users.mustChangePassword, role: roles.key, gymName: gyms.name }).from(users)).innerJoin(roles, eq(users.roleId, roles.id))).innerJoin(gyms, eq(users.gymId, gyms.id))).where(and(eq(users.id, userId), eq(users.gymId, actor.gymId))))[0];
+    if (!target || target.role === "owner" || !target.active || !target.mustChangePassword) redirect("/settings/staff?invite=unavailable");
+    if (!(await consumeLimit("staff:invitation", userId, 3, 60 * 60 * 1000)).allowed) redirect("/settings/staff?invite=limited");
+    const token = await createStaffSetupToken(userId);
+    try {
+        await sendStaffInvitation({ to: target.email, name: target.name, gymName: target.gymName, role: target.role, setupUrl: `${requireAppUrl()}/set-password?token=${encodeURIComponent(token)}` });
+    } catch (error) {
+        logger.error("staff.invitation_resend_failed", error, { userId, gymId: actor.gymId });
+        redirect("/settings/staff?invite=failed");
+    }
+    redirect("/settings/staff?invite=sent");
 }
 export async function setStaffStatus(userId: string, active: boolean) {
     const actor = await requirePermission("users.manage");
@@ -50,6 +86,41 @@ export async function setStaffStatus(userId: string, active: boolean) {
         await (tx.update(trainers).set({ status: active ? "active" : "inactive", updatedAt: new Date() })).where(and(eq(trainers.gymId, actor.gymId), eq(trainers.userId, userId)));
     });
     revalidatePath("/settings/staff");
+}
+export async function deleteStaff(userId: string) {
+    const actor = await requirePermission("users.manage");
+    const target = (await ((db.select({ id: users.id, email: users.email, name: users.name, role: roles.key }).from(users)).innerJoin(roles, eq(users.roleId, roles.id))).where(and(eq(users.id, userId), eq(users.gymId, actor.gymId))))[0];
+    if (!target || target.role === "owner") redirect("/settings/staff?staff=unavailable");
+    const attendanceReference = (await (db.select({ id: attendance.id }).from(attendance)).where(and(eq(attendance.gymId, actor.gymId), eq(attendance.staffUserId, userId))).limit(1))[0];
+    const expenseReference = (await (db.select({ id: expenses.id }).from(expenses)).where(and(eq(expenses.gymId, actor.gymId), eq(expenses.createdBy, userId))).limit(1))[0];
+    if (attendanceReference || expenseReference) redirect("/settings/staff?staff=referenced");
+
+    const authRows = await db.execute<{ id: string }>(sql`select id::text from auth.users where lower(email) = lower(${target.email}) limit 1`);
+    const authUserId = authRows[0]?.id;
+    if (authUserId) {
+        try {
+            const { error } = await createAdminClient().auth.admin.deleteUser(authUserId);
+            if (error) throw error;
+        } catch (error) {
+            const failure = authDeleteFailure(error);
+            const details = error as { status?: number; code?: string };
+            logger.error("staff.auth_delete_failed", error, { userId, gymId: actor.gymId, status: details.status, errorCode: details.code });
+            redirect(`/settings/staff?staff=${failure}`);
+        }
+    }
+
+    try {
+        await db.transaction(async (tx) => {
+            await (tx.update(trainers).set({ userId: null, status: "inactive", updatedAt: new Date() })).where(and(eq(trainers.gymId, actor.gymId), eq(trainers.userId, userId)));
+            await (tx.delete(users)).where(and(eq(users.id, userId), eq(users.gymId, actor.gymId)));
+            await tx.insert(auditLogs).values({ id: randomUUID(), gymId: actor.gymId, userId: actor.id, action: "staff.deleted", entityType: "user", entityId: userId, metadata: { role: target.role } });
+        });
+    } catch (error) {
+        logger.error("staff.application_delete_failed", error, { userId, gymId: actor.gymId });
+        redirect("/settings/staff?staff=failed");
+    }
+    revalidatePath("/settings/staff");
+    redirect("/settings/staff?staff=deleted");
 }
 export async function changeStaffRole(userId: string, data: FormData) {
     const actor = await requirePermission("users.manage");
